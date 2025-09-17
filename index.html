@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Medical Care Dashboard</title>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#F4F7FB; --card:#FFFFFF; --muted:#6B7280; --accent:#0EA5A4; --accent-dark:#0B7C79;
+      --success:#10B981; --danger:#EF4444; --glass: rgba(255,255,255,0.6);
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#f8fafc 0%,var(--bg) 100%);color:#0F172A}
+    .wrap{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+    /* Sidebar */
+    aside{background:var(--card);padding:20px;border-right:1px solid #E6E9EF}
+    .brand{font-weight:700;color:var(--accent-dark);font-size:18px;margin-bottom:18px}
+    nav a{display:flex;gap:12px;align-items:center;padding:10px;border-radius:8px;color:#0F172A;text-decoration:none;margin-bottom:6px}
+    nav a.active{background:linear-gradient(90deg,var(--glass),transparent);box-shadow:0 1px 2px rgba(2,6,23,0.04)}
+    nav small{color:var(--muted);font-size:12px}
+
+    /* Header */
+    header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:transparent}
+    .search{display:flex;gap:8px;align-items:center}
+    .search input{padding:10px 12px;border-radius:10px;border:1px solid #E6E9EF;min-width:260px}
+    .actions{display:flex;gap:8px}
+    button.btn{background:var(--accent);color:white;padding:10px 12px;border-radius:8px;border:none;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid #E6E9EF;padding:9px 11px;border-radius:8px}
+
+    /* Content */
+    main{padding:20px}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+    .card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #EDEFF3}
+    .card h3{margin:0;font-size:14px;color:var(--muted)}
+    .card p{margin:8px 0 0;font-size:22px;font-weight:700}
+
+    .grid-2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+    .chart-wrap{background:var(--card);padding:14px;border-radius:12px;border:1px solid #EDEFF3}
+    .list-wrap{background:var(--card);padding:14px;border-radius:12px;border:1px solid #EDEFF3}
+
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:10px;border-bottom:1px solid #F1F4F8;text-align:left}
+    th{color:var(--muted);font-weight:600}
+    tr:hover td{background:linear-gradient(90deg, #ffffff, #fbfdff)}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;font-size:12px}
+    .pill.green{background:#ECFDF5;color:var(--success)}
+    .pill.red{background:#FEF2F2;color:var(--danger)}
+
+    /* responsive */
+    @media (max-width:980px){.wrap{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
+    @media (max-width:560px){.cards{grid-template-columns:1fr}.search input{min-width:120px}}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.4);display:none;align-items:center;justify-content:center}
+    .modal{background:var(--card);padding:18px;border-radius:12px;max-width:720px;width:100%;}
+    .flex{display:flex;gap:12px}
+    .space-between{display:flex;justify-content:space-between;align-items:center}
+    .muted{color:var(--muted);font-size:13px}
+    input,select{padding:8px;border-radius:8px;border:1px solid #E6E9EF;width:100%}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside>
+      <div class="brand">MediCare Dashboard</div>
+      <div class="muted" style="margin-bottom:12px">Welcome, Admin</div>
+      <nav>
+        <a class="active">📊 Overview</a>
+        <a>🧾 Patients</a>
+        <a>📅 Appointments</a>
+        <a>⚙️ Settings</a>
+      </nav>
+      <div style="margin-top:18px;font-size:13px;color:var(--muted)">Quick links</div>
+      <div style="margin-top:10px"><button class="btn" id="openAdd">+ Add Patient</button></div>
+    </aside>
+
+    <div>
+      <header>
+        <div class="search">
+          <input id="globalSearch" placeholder="Search patient, id or condition..." />
+          <button class="ghost" id="btnFilter">Filter</button>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="exportCsv">Export CSV</button>
+          <button class="btn" id="refreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <main>
+        <div class="cards">
+          <div class="card">
+            <h3>Total Patients</h3>
+            <p id="totalPatients">0</p>
+            <small class="muted">Updated just now</small>
+          </div>
+          <div class="card">
+            <h3>Today's Appointments</h3>
+            <p id="todayAppts">0</p>
+            <small class="muted">Scheduled</small>
+          </div>
+          <div class="card">
+            <h3>Active Cases</h3>
+            <p id="activeCases">0</p>
+            <small class="muted">Under treatment</small>
+          </div>
+          <div class="card">
+            <h3>Avg. Wait Time</h3>
+            <p id="avgWait">0 min</p>
+            <small class="muted">Last 30 days</small>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <strong>Patients — Last 12 months</strong>
+              <small class="muted">Monthly trend</small>
+            </div>
+            <canvas id="patientsChart" height="120"></canvas>
+          </div>
+
+          <div class="list-wrap">
+            <div class="space-between" style="margin-bottom:10px">
+              <strong>Recent Patients</strong>
+              <small class="muted">Latest 6</small>
+            </div>
+            <ul id="recentList" style="list-style:none;padding:0;margin:0"></ul>
+          </div>
+        </div>
+
+        <div style="margin-top:16px" class="card">
+          <div class="space-between" style="margin-bottom:10px">
+            <strong>Patient Directory</strong>
+            <div style="display:flex;gap:8px">
+              <select id="statusFilter" style="width:150px">
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="discharged">Discharged</option>
+                <option value="critical">Critical</option>
+              </select>
+              <button class="ghost" id="clearFilters">Clear</button>
+            </div>
+          </div>
+
+          <div style="overflow:auto">
+            <table id="patientsTable">
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Condition</th><th>Doctor</th><th>Next Appt</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: Add / Edit Patient -->
+  <div class="modal-backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="space-between">
+        <h3 id="modalTitle">Add Patient</h3>
+        <button id="closeModal" class="ghost">Close</button>
+      </div>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label class="muted">Full name</label>
+          <input id="pName" />
+        </div>
+        <div>
+          <label class="muted">Age</label>
+          <input id="pAge" type="number" />
+        </div>
+        <div>
+          <label class="muted">Condition</label>
+          <input id="pCondition" />
+        </div>
+        <div>
+          <label class="muted">Doctor</label>
+          <input id="pDoctor" />
+        </div>
+        <div>
+          <label class="muted">Next appointment</label>
+          <input id="pNext" type="date" />
+        </div>
+        <div>
+          <label class="muted">Status</label>
+          <select id="pStatus">
+            <option value="active">Active</option>
+            <option value="discharged">Discharged</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="ghost" id="cancelModal">Cancel</button>
+        <button class="btn" id="savePatient">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- sample data ---
+    let patients = [
+      {id: 'P-1001', name: 'Rina Kapoor', age: 29, condition: 'Hypertension', doctor: 'Dr. Mehta', next: '2025-09-21', status: 'active'},
+      {id: 'P-1002', name: 'Arjun Patel', age: 45, condition: 'Diabetes', doctor: 'Dr. Roy', next: '2025-09-19', status: 'active'},
+      {id: 'P-1003', name: 'Sanya Rao', age: 62, condition: 'Post-op', doctor: 'Dr. Iyer', next: '2025-09-30', status: 'discharged'},
+      {id: 'P-1004', name: 'Vikram Singh', age: 37, condition: 'Fracture', doctor: 'Dr. Bose', next: '2025-10-03', status: 'active'},
+      {id: 'P-1005', name: 'Maya Sharma', age: 55, condition: 'Cardiac', doctor: 'Dr. Verma', next: '2025-09-18', status: 'critical'},
+      {id: 'P-1006', name: 'Sameer Khan', age: 40, condition: 'Asthma', doctor: 'Dr. Roy', next: '2025-09-25', status: 'active'}
+    ];
+
+    // Utility: render stats
+    function renderStats(){
+      document.getElementById('totalPatients').innerText = patients.length;
+      const today = new Date().toISOString().slice(0,10);
+      const todayAppts = patients.filter(p=>p.next === today).length;
+      document.getElementById('todayAppts').innerText = todayAppts;
+      document.getElementById('activeCases').innerText = patients.filter(p=>p.status==='active').length;
+      document.getElementById('avgWait').innerText = Math.floor(Math.random()*40)+5 + ' min';
+    }
+
+    // Recent list
+    function renderRecent(){
+      const list = document.getElementById('recentList'); list.innerHTML='';
+      patients.slice(0,6).forEach(p=>{
+        const li = document.createElement('li'); li.style.padding='8px 0';
+        li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${p.name}</strong><div class='muted' style='font-size:12px'>${p.condition} • ${p.doctor}</div></div><div class='pill ${p.status==='active'? 'green': p.status==='critical'? 'red':'green'}'>${p.status}</div></div>`;
+        list.appendChild(li);
+      })
+    }
+
+    // Table
+    function renderTable(filter='all', query=''){
+      const tbody = document.querySelector('#patientsTable tbody'); tbody.innerHTML='';
+      const rows = patients.filter(p=>{
+        if(filter !== 'all' && p.status !== filter) return false;
+        if(!query) return true;
+        const q = query.toLowerCase();
+        return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.condition.toLowerCase().includes(q);
+      });
+      rows.forEach(p=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.id}</td><td>${p.name}</td><td>${p.condition}</td><td>${p.doctor}</td><td>${p.next}</td><td><span class='pill ${p.status==='critical'?'red':'green'}'>${p.status}</span></td><td><button class='ghost' data-id='${p.id}' onclick="editPatient('${p.id}')">Edit</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Chart
+    let chart;
+    function initChart(){
+      const ctx = document.getElementById('patientsChart');
+      const months = (function(){
+        const d = new Date();
+        const arr=[]; for(let i=11;i>=0;i--){ const mm = new Date(d.getFullYear(), d.getMonth()-i, 1); arr.push(mm.toLocaleString(undefined,{month:'short'})); } return arr;
+      })();
+      const data = {labels: months, datasets:[{label:'New patients',data: months.map(()=>Math.floor(Math.random()*40)+5), tension:0.3, fill:false, pointRadius:3}] };
+      chart = new Chart(ctx,{type:'line',data:data,options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    }
+
+    // Modal logic
+    const modal = document.getElementById('modal');
+    document.getElementById('openAdd').addEventListener('click',()=>{openModal()});
+    document.getElementById('closeModal').addEventListener('click',closeModal);
+    document.getElementById('cancelModal').addEventListener('click',closeModal);
+
+    function openModal(patient=null){
+      modal.style.display='flex';
+      document.getElementById('modalTitle').innerText = patient? 'Edit Patient':'Add Patient';
+      document.getElementById('pName').value = patient? patient.name : '';
+      document.getElementById('pAge').value = patient? patient.age : '';
+      document.getElementById('pCondition').value = patient? patient.condition : '';
+      document.getElementById('pDoctor').value = patient? patient.doctor : '';
+      document.getElementById('pNext').value = patient? patient.next : '';
+      document.getElementById('pStatus').value = patient? patient.status : 'active';
+      document.getElementById('savePatient').dataset.edit = patient? patient.id : '';
+    }
+    function closeModal(){ modal.style.display='none'; document.getElementById('savePatient').dataset.edit = '' }
+
+    document.getElementById('savePatient').addEventListener('click',()=>{
+      const idToEdit = document.getElementById('savePatient').dataset.edit;
+      const payload = {
+        name: document.getElementById('pName').value.trim(),
+        age: document.getElementById('pAge').value,
+        condition: document.getElementById('pCondition').value.trim(),
+        doctor: document.getElementById('pDoctor').value.trim(),
+        next: document.getElementById('pNext').value,
+        status: document.getElementById('pStatus').value
+      };
+      if(!payload.name){ alert('Name required'); return; }
+      if(idToEdit){
+        const idx = patients.findIndex(p=>p.id===idToEdit);
+        patients[idx] = {...patients[idx], ...payload};
+      } else {
+        const newId = 'P-' + (1000 + patients.length + 1);
+        patients.unshift({id:newId, ...payload});
+      }
+      refreshAll(); closeModal();
+    });
+
+    function editPatient(id){
+      const p = patients.find(x=>x.id===id); openModal(p);
+    }
+
+    // search/filter
+    document.getElementById('globalSearch').addEventListener('input',(e)=>{
+      const q = e.target.value; renderTable(document.getElementById('statusFilter').value, q);
+    });
+    document.getElementById('statusFilter').addEventListener('change',()=>{
+      renderTable(document.getElementById('statusFilter').value, document.getElementById('globalSearch').value);
+    });
+    document.getElementById('clearFilters').addEventListener('click',()=>{document.getElementById('statusFilter').value='all';document.getElementById('globalSearch').value='';renderTable();});
+
+    document.getElementById('refreshBtn').addEventListener('click',()=>{refreshAll()});
+
+    // Export CSV
+    function exportCSV(){
+      const header = ['ID','Name','Age','Condition','Doctor','Next Appointment','Status'];
+      const rows = patients.map(p=>[p.id,p.name,p.age,p.condition,p.doctor,p.next,p.status]);
+      const csv = [header].concat(rows).map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='patients.csv'; a.click(); URL.revokeObjectURL(url);
+    }
+    document.getElementById('exportCsv').addEventListener('click',exportCSV);
+
+    // refresh helpers
+    function refreshAll(){ renderStats(); renderRecent(); renderTable(); if(chart) chart.data.datasets[0].data = chart.data.labels.map(()=>Math.floor(Math.random()*40)+5); if(chart) chart.update(); }
+
+    // init
+    window.addEventListener('load',()=>{ initChart(); refreshAll(); });
+
+  </script>
+</body>
+</html>
